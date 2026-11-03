@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Presupuesto Personal</title>
+  
+  <!-- Manifest inline para soporte PWA / APK -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"Presupuesto Personal","short_name":"Presupuesto","start_url":".","display":"standalone","background_color":"#3B4A3E","theme_color":"#3B4A3E","icons":[{"src":"https://placehold.co/192x192/4A5D4E/F5F2EB?text=$","sizes":"192x192","type":"image/png"},{"src":"https://placehold.co/512x512/4A5D4E/F5F2EB?text=$","sizes":"512x512","type":"image/png"}]}'>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            moss: {
+              DEFAULT: '#4A5D4E',
+              dark: '#2E3B30',
+              deep: '#3B4A3E',
+              light: '#5C7060',
+              soft: '#738A77'
+            },
+            beige: {
+              DEFAULT: '#F5F2EB',
+              dark: '#EFEBE0',
+              accent: '#E6DFC8'
+            },
+            brick: {
+              DEFAULT: '#B85B43',
+              dark: '#9E4A34',
+              light: '#D36F56'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #2E3B30;
+      color: #F5F2EB;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      touch-action: manipulation;
+    }
+    .beige-card {
+      background-color: #F5F2EB;
+      color: #1A241C;
+    }
+    /* Estilo suave para scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #2E3B30;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #5C7060;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between max-w-md mx-auto shadow-2xl relative bg-moss-dark pb-24">
+
+  <!-- Header Superior & Selección de Mes -->
+  <header class="p-4 bg-moss-deep sticky top-0 z-30 shadow-md border-b border-moss-light/30">
+    <div class="flex justify-between items-center mb-2">
+      <h1 class="text-xl font-bold tracking-wide flex items-center gap-2 text-beige">
+        <i data-lucide="wallet" class="w-6 h-6 text-beige-accent"></i> Presupuesto
+      </h1>
+      <button onclick="toggleDataModal()" class="p-2 rounded-xl bg-moss hover:bg-moss-light text-beige transition" title="Respaldar / Cargar JSON">
+        <i data-lucide="database" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Navegación de Mes -->
+    <div class="flex items-center justify-between bg-moss rounded-2xl p-2 border border-moss-light/40">
+      <button onclick="changeMonth(-1)" class="p-2 hover:bg-moss-light rounded-xl transition">
+        <i data-lucide="chevron-left" class="w-5 h-5 text-beige"></i>
+      </button>
+      <span id="current-month-display" class="font-semibold text-lg capitalize text-beige">Cargando...</span>
+      <button onclick="changeMonth(1)" class="p-2 hover:bg-moss-light rounded-xl transition">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-beige"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Contenedor Principal de Solapas -->
+  <main class="p-4 flex-1">
+    
+    <!-- SOLAPA 1: INGRESOS -->
+    <section id="tab-ingresos" class="tab-content space-y-4">
+      <div class="beige-card p-4 rounded-2xl shadow-lg border border-beige-dark">
+        <h2 class="text-lg font-bold text-moss-dark mb-3 flex items-center gap-2">
+          <i data-lucide="arrow-down-left" class="w-5 h-5 text-emerald-700"></i> Nuevo Ingreso
+        </h2>
+        <form id="form-ingreso" onsubmit="addIncome(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-moss-dark/70 mb-1">Monto ($)</label>
+            <input type="number" step="0.01" min="0.01" id="ingreso-monto" required placeholder="0.00" 
+              class="w-full p-3 rounded-xl bg-white border border-moss-light/30 focus:outline-none focus:ring-2 focus:ring-moss text-lg font-semibold text-moss-dark">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-moss-dark/70 mb-1">Especificación / Detalle</label>
+            <input type="text" id="ingreso-detalle" required placeholder="Ej. Sueldo, Trabajo Freelance..." 
+              class="w-full p-3 rounded-xl bg-white border border-moss-light/30 focus:outline-none focus:ring-2 focus:ring-moss text-sm text-moss-dark">
+          </div>
+          <button type="submit" class="w-full bg-moss hover:bg-moss-dark text-beige font-semibold py-3 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
+            <i data-lucide="plus-circle" class="w-5 h-5"></i> Agregar Ingreso
+          </button>
+        </form>
+      </div>
+
+      <!-- Gráfico de Torta de Ingresos -->
+      <div class="bg-moss p-4 rounded-2xl border border-moss-light/30 shadow">
+        <h3 class="text-sm font-semibold text-beige/80 mb-2">Distribución de Ingresos</h3>
+        <div class="relative h-48 flex justify-center items-center">
+          <canvas id="chart-ingresos"></canvas>
+        </div>
+      </div>
+
+      <!-- Lista de Ingresos -->
+      <div class="space-y-2">
+        <h3 class="text-sm font-semibold text-beige/70 uppercase tracking-wider">Historial de Ingresos</h3>
+        <div id="list-ingresos" class="space-y-2">
+          <!-- Items renderizados por JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- SOLAPA 2: GASTOS -->
+    <section id="tab-gastos" class="tab-content hidden space-y-4">
+      <div class="beige-card p-4 rounded-2xl shadow-lg border border-beige-dark">
+        <h2 class="text-lg font-bold text-moss-dark mb-3 flex items-center gap-2">
+          <i data-lucide="arrow-up-right" class="w-5 h-5 text-brick"></i> Nuevo Gasto
+        </h2>
+        <form id="form-gasto" onsubmit="addExpense(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-moss-dark/70 mb-1">Categoría</label>
+            <select id="gasto-categoria" class="w-full p-3 rounded-xl bg-white border border-moss-light/30 focus:outline-none focus:ring-2 focus:ring-moss text-sm font-medium text-moss-dark">
+              <option value="Gastos Fijos">📌 Gastos Fijos</option>
+              <option value="Impuestos">📄 Impuestos</option>
+              <option value="Gastos Diarios">🛒 Gastos Diarios</option>
+              <option value="Comida">🍏 Comida</option>
+              <option value="Recreativo">🎉 Recreativo</option>
+              <option value="Extras">⚡ Extras</option>
+              <option value="Nafta">⛽ Nafta</option>
+              <option value="Tarjeta de Crédito">💳 Tarjeta de Crédito</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-moss-dark/70 mb-1">Monto ($)</label>
+            <input type="number" step="0.01" min="0.01" id="gasto-monto" required placeholder="0.00" 
+              class="w-full p-3 rounded-xl bg-white border border-moss-light/30 focus:outline-none focus:ring-2 focus:ring-moss text-lg font-semibold text-moss-dark">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-moss-dark/70 mb-1">Nota / Detalle (Opcional)</label>
+            <input type="text" id="gasto-detalle" placeholder="Ej. Supermercado, Factura Luz..." 
+              class="w-full p-3 rounded-xl bg-white border border-moss-light/30 focus:outline-none focus:ring-2 focus:ring-moss text-sm text-moss-dark">
+          </div>
+          <button type="submit" class="w-full bg-brick hover:bg-brick-dark text-beige font-semibold py-3 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
+            <i data-lucide="minus-circle" class="w-5 h-5"></i> Agregar Gasto
+          </button>
+        </form>
+      </div>
+
+      <!-- Gráfico de Torta de Gastos -->
+      <div class="bg-moss p-4 rounded-2xl border border-moss-light/30 shadow">
+        <h3 class="text-sm font-semibold text-beige/80 mb-2">Desglose de Gastos</h3>
+        <div class="relative h-56 flex justify-center items-center">
+          <canvas id="chart-gastos"></canvas>
+        </div>
+      </div>
+
+      <!-- Lista de Gastos -->
+      <div class="space-y-2">
+        <h3 class="text-sm font-semibold text-beige/70 uppercase tracking-wider">Historial de Gastos</h3>
+        <div id="list-gastos" class="space-y-2">
+          <!-- Items renderizados por JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- SOLAPA 3: BALANCE MENSUAL -->
+    <section id="tab-balance" class="tab-content hidden space-y-4">
+      
+      <!-- Card del Estado de Salud Financiera -->
+      <div id="status-card" class="beige-card p-5 rounded-2xl shadow-xl transition-all border border-beige-dark text-center space-y-2">
+        <span class="text-xs font-bold uppercase tracking-widest opacity-80">Estado Financiero del Mes</span>
+        <div id="balance-amount" class="text-3xl font-extrabold">$0.00</div>
+        <p id="balance-status-text" class="text-sm font-medium">Cargando información...</p>
+      </div>
+
+      <!-- Resumen de Métricas -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-moss p-3 rounded-2xl border border-moss-light/40 shadow">
+          <div class="flex items-center gap-2 text-emerald-300 text-xs font-semibold mb-1">
+            <i data-lucide="trending-up" class="w-4 h-4"></i> Ingresos
+          </div>
+          <div id="total-ingresos-display" class="text-lg font-bold text-beige">$0.00</div>
+        </div>
+        <div class="bg-moss p-3 rounded-2xl border border-moss-light/40 shadow">
+          <div class="flex items-center gap-2 text-brick-light text-xs font-semibold mb-1">
+            <i data-lucide="trending-down" class="w-4 h-4"></i> Gastos
+          </div>
+          <div id="total-gastos-display" class="text-lg font-bold text-beige">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Gráfico de Comparación en Barras -->
+      <div class="bg-moss p-4 rounded-2xl border border-moss-light/30 shadow">
+        <h3 class="text-sm font-semibold text-beige/80 mb-2">Comparativa Ingresos vs Gastos</h3>
+        <div class="relative h-52">
+          <canvas id="chart-balance"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Barra de Navegación Inferior (Tabs) -->
+  <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-moss-deep border-t border-moss-light/30 p-2 z-30 flex justify-around items-center rounded-t-2xl shadow-2xl">
+    <button onclick="switchTab('ingresos')" id="btn-tab-ingresos" class="flex flex-col items-center gap-1 p-2 rounded-xl text-beige-accent transition w-1/3">
+      <i data-lucide="arrow-down-circle" class="w-6 h-6"></i>
+      <span class="text-xs font-medium">Ingresos</span>
+    </button>
+    <button onclick="switchTab('gastos')" id="btn-tab-gastos" class="flex flex-col items-center gap-1 p-2 rounded-xl text-beige/60 hover:text-beige transition w-1/3">
+      <i data-lucide="arrow-up-circle" class="w-6 h-6"></i>
+      <span class="text-xs font-medium">Gastos</span>
+    </button>
+    <button onclick="switchTab('balance')" id="btn-tab-balance" class="flex flex-col items-center gap-1 p-2 rounded-xl text-beige/60 hover:text-beige transition w-1/3">
+      <i data-lucide="pie-chart" class="w-6 h-6"></i>
+      <span class="text-xs font-medium">Balance</span>
+    </button>
+  </nav>
+
+  <!-- Modal de Gestión de Datos (JSON Import/Export) -->
+  <div id="modal-data" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="beige-card p-5 rounded-2xl w-full max-w-sm space-y-4 border border-beige-dark shadow-2xl">
+      <div class="flex justify-between items-center border-b border-moss-dark/10 pb-2">
+        <h3 class="font-bold text-moss-dark flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5"></i> Respaldo de Datos (JSON)
+        </h3>
+        <button onclick="toggleDataModal()" class="text-moss-dark/60 hover:text-moss-dark">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      
+      <p class="text-xs text-moss-dark/80">Guarda una copia de seguridad de todos tus meses o restaura datos anteriores.</p>
+
+      <div class="space-y-2">
+        <button onclick="exportJSON()" class="w-full bg-moss text-beige font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm hover:bg-moss-dark transition">
+          <i data-lucide="download" class="w-4 h-4"></i> Descargar Datos (JSON)
+        </button>
+        
+        <label class="w-full bg-moss-light text-beige font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm hover:bg-moss transition cursor-pointer">
+          <i data-lucide="upload" class="w-4 h-4"></i> Cargar Datos (JSON)
+          <input type="file" id="import-file" accept=".json" onchange="importJSON(event)" class="hidden">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    // Variables de Estado Global
+    let currentDate = new Date();
+    let appData = JSON.parse(localStorage.getItem('budget_app_data')) || {};
+    
+    // Instancias de Gráficos Chart.js
+    let chartIngresos = null;
+    let chartGastos = null;
+    let chartBalance = null;
+
+    // Inicialización al cargar la página
+    window.onload = () => {
+      lucide.createIcons();
+      updateMonthDisplay();
+      renderAll();
+    };
+
+    // Generar clave del mes actual (Formato YYYY-MM)
+    function getMonthKey() {
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+
+    // Navegación de Meses
+    function changeMonth(delta) {
+      currentDate.setMonth(currentDate.getMonth() + delta);
+      updateMonthDisplay();
+      renderAll();
+    }
+
+    function updateMonthDisplay() {
+      const options = { month: 'long', year: 'numeric' };
+      document.getElementById('current-month-display').innerText = currentDate.toLocaleDateString('es-ES', options);
+    }
+
+    // Garantizar que la estructura exista para el mes actual
+    function getCurrentMonthData() {
+      const key = getMonthKey();
+      if (!appData[key]) {
+        appData[key] = { ingresos: [], gastos: [] };
+      }
+      return appData[key];
+    }
+
+    // Guardar en LocalStorage
+    function saveData() {
+      localStorage.setItem('budget_app_data', JSON.stringify(appData));
+    }
+
+    // Agregar Ingreso
+    function addIncome(e) {
+      e.preventDefault();
+      const monto = parseFloat(document.getElementById('ingreso-monto').value);
+      const detalle = document.getElementById('ingreso-detalle').value.trim();
+
+      if (isNaN(monto) || monto <= 0 || !detalle) return;
+
+      const data = getCurrentMonthData();
+      data.ingresos.push({
+        id: Date.now(),
+        monto,
+        detalle
+      });
+
+      saveData();
+      document.getElementById('form-ingreso').reset();
+      renderAll();
+    }
+
+    // Eliminar Ingreso
+    function deleteIncome(id) {
+      const data = getCurrentMonthData();
+      data.ingresos = data.ingresos.filter(item => item.id !== id);
+      saveData();
+      renderAll();
+    }
+
+    // Agregar Gasto
+    function addExpense(e) {
+      e.preventDefault();
+      const categoria = document.getElementById('gasto-categoria').value;
+      const monto = parseFloat(document.getElementById('gasto-monto').value);
+      const detalle = document.getElementById('gasto-detalle').value.trim() || categoria;
+
+      if (isNaN(monto) || monto <= 0) return;
+
+      const data = getCurrentMonthData();
+      data.gastos.push({
+        id: Date.now(),
+        categoria,
+        monto,
+        detalle
+      });
+
+      saveData();
+      document.getElementById('form-gasto').reset();
+      renderAll();
+    }
+
+    // Eliminar Gasto
+    function deleteExpense(id) {
+      const data = getCurrentMonthData();
+      data.gastos = data.gastos.filter(item => item.id !== id);
+      saveData();
+      renderAll();
+    }
+
+    // Renderizado Completo de Datos y Gráficos
+    function renderAll() {
+      const data = getCurrentMonthData();
+
+      // Renderizar Listas
+      renderIncomeList(data.ingresos);
+      renderExpenseList(data.gastos);
+
+      // Renderizar Totales y Balances
+      const totalIngresos = data.ingresos.reduce((sum, item) => sum + item.monto, 0);
+      const totalGastos = data.gastos.reduce((sum, item) => sum + item.monto, 0);
+      const balance = totalIngresos - totalGastos;
+
+      document.getElementById('total-ingresos-display').innerText = `$${totalIngresos.toFixed(2)}`;
+      document.getElementById('total-gastos-display').innerText = `$${totalGastos.toFixed(2)}`;
+      
+      const balanceAmountEl = document.getElementById('balance-amount');
+      const balanceStatusEl = document.getElementById('balance-status-text');
+      const statusCard = document.getElementById('status-card');
+
+      balanceAmountEl.innerText = `$${balance.toFixed(2)}`;
+
+      if (balance > 0) {
+        statusCard.className = "p-5 rounded-2xl shadow-xl transition-all border border-beige-dark text-center space-y-2 bg-beige text-moss-dark";
+        balanceStatusEl.innerText = "¡Excelente! Tienes un superávit en tu balance.";
+      } else if (balance === 0 && totalIngresos === 0 && totalGastos === 0) {
+        statusCard.className = "p-5 rounded-2xl shadow-xl transition-all border border-beige-dark text-center space-y-2 bg-beige text-moss-dark";
+        balanceStatusEl.innerText = "Sin registros cargados en este mes.";
+      } else if (balance === 0) {
+        statusCard.className = "p-5 rounded-2xl shadow-xl transition-all border border-beige-dark text-center space-y-2 bg-beige text-moss-dark";
+        balanceStatusEl.innerText = "Tus ingresos y gastos están totalmente equilibrados.";
+      } else {
+        statusCard.className = "p-5 rounded-2xl shadow-xl transition-all border text-center space-y-2 bg-brick text-beige border-brick-dark";
+        balanceStatusEl.innerText = "⚠️ Alerta: Tienes un déficit este mes.";
+      }
+
+      // Renderizar Gráficos
+      renderIncomeChart(data.ingresos);
+      renderExpenseChart(data.gastos);
+      renderBalanceChart(totalIngresos, totalGastos);
+    }
+
+    function renderIncomeList(ingresos) {
+      const listEl = document.getElementById('list-ingresos');
+      if (ingresos.length === 0) {
+        listEl.innerHTML = `<div class="text-xs text-beige/50 text-center py-4 bg-moss-deep/50 rounded-xl">No hay ingresos registrados este mes.</div>`;
+        return;
+      }
+      listEl.innerHTML = ingresos.map(item => `
+        <div class="flex justify-between items-center p-3 bg-moss rounded-xl border border-moss-light/30 shadow-sm">
+          <div>
+            <p class="font-medium text-sm text-beige">${escapeHtml(item.detalle)}</p>
+            <p class="text-xs text-emerald-400 font-semibold">+$${item.monto.toFixed(2)}</p>
+          </div>
+          <button onclick="deleteIncome(${item.id})" class="p-2 text-beige/40 hover:text-brick-light transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function renderExpenseList(gastos) {
+      const listEl = document.getElementById('list-gastos');
+      if (gastos.length === 0) {
+        listEl.innerHTML = `<div class="text-xs text-beige/50 text-center py-4 bg-moss-deep/50 rounded-xl">No hay gastos registrados este mes.</div>`;
+        return;
+      }
+      listEl.innerHTML = gastos.map(item => `
+        <div class="flex justify-between items-center p-3 bg-moss rounded-xl border border-moss-light/30 shadow-sm">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs px-2 py-0.5 rounded-md bg-moss-dark text-beige-accent font-medium">${escapeHtml(item.categoria)}</span>
+              <span class="text-sm text-beige font-medium">${escapeHtml(item.detalle)}</span>
+            </div>
+            <p class="text-xs text-brick-light font-semibold mt-1">-$${item.monto.toFixed(2)}</p>
+          </div>
+          <button onclick="deleteExpense(${item.id})" class="p-2 text-beige/40 hover:text-brick-light transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // Gráficos Chart.js
+    function renderIncomeChart(ingresos) {
+      const ctx = document.getElementById('chart-ingresos').getContext('2d');
+      if (chartIngresos) chartIngresos.destroy();
+
+      if (ingresos.length === 0) return;
+
+      const labels = ingresos.map(i => i.detalle);
+      const data = ingresos.map(i => i.monto);
+
+      chartIngresos = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: ['#5C7060', '#738A77', '#A3B19B', '#D3DFC9', '#E6DFC8'],
+            borderColor: '#2E3B30',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#F5F2EB', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderExpenseChart(gastos) {
+      const ctx = document.getElementById('chart-gastos').getContext('2d');
+      if (chartGastos) chartGastos.destroy();
+
+      if (gastos.length === 0) return;
+
+      // Agrupar por categoría
+      const categoryTotals = {};
+      gastos.forEach(g => {
+        categoryTotals[g.categoria] = (categoryTotals[g.categoria] || 0) + g.monto;
+      });
+
+      const labels = Object.keys(categoryTotals);
+      const data = Object.values(categoryTotals);
+
+      chartGastos = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: [
+              '#B85B43', '#D36F56', '#E6DFC8', '#5C7060', 
+              '#738A77', '#2E3B30', '#A3B19B', '#C05638'
+            ],
+            borderColor: '#2E3B30',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#F5F2EB', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderBalanceChart(ingresos, gastos) {
+      const ctx = document.getElementById('chart-balance').getContext('2d');
+      if (chartBalance) chartBalance.destroy();
+
+      chartBalance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Ingresos Total', 'Gastos Total'],
+          datasets: [{
+            data: [ingresos, gastos],
+            backgroundColor: ['#5C7060', '#B85B43'],
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              ticks: { color: '#F5F2EB' },
+              grid: { color: '#5C706033' }
+            },
+            x: {
+              ticks: { color: '#F5F2EB' },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // Cambio de Solapas / Tabs
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+      const tabs = ['ingresos', 'gastos', 'balance'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`btn-tab-${t}`);
+        if (t === tabName) {
+          btn.className = "flex flex-col items-center gap-1 p-2 rounded-xl text-beige-accent transition w-1/3";
+        } else {
+          btn.className = "flex flex-col items-center gap-1 p-2 rounded-xl text-beige/60 hover:text-beige transition w-1/3";
+        }
+      });
+
+      renderAll();
+    }
+
+    // Respaldo e Importación JSON
+    function toggleDataModal() {
+      const modal = document.getElementById('modal-data');
+      modal.classList.toggle('hidden');
+    }
+
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `presupuesto_respaldo_${getMonthKey()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importJSON(event) {
+      const fileReader = new FileReader();
+      fileReader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (typeof importedData === 'object') {
+            appData = importedData;
+            saveData();
+            renderAll();
+            toggleDataModal();
+          }
+        } catch (err) {
+          showToast("Archivo JSON inválido.");
+        }
+      };
+      if (event.target.files[0]) {
+        fileReader.readAsText(event.target.files[0]);
+      }
+    }
+
+    // Auxiliares
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-brick text-beige text-xs py-2 px-4 rounded-xl shadow-lg z-50';
+      toast.innerText = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+  </script>
+</body>
+</html>
